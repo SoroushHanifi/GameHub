@@ -36,41 +36,60 @@ namespace PokerService.Services
 
         public async Task SaveRoomToDbAsync(Room room)
         {
-            _dbContext.Rooms.Add(room);
-            await _dbContext.SaveChangesAsync();
+            try
+            {
+                _dbContext.Rooms.Add(room);
+                await _dbContext.SaveChangesAsync();
 
-            var db = _redis.GetDatabase();
-            await db.KeyDeleteAsync($"Room:{room.Id}");
+                var db = _redis.GetDatabase();
+                await db.KeyDeleteAsync($"Room:{room.Id}");
+            }
+            catch (Exception ex)
+            {
+                
+                throw new Exception(ex.Message);
+            }
         }
 
-        public async Task<Room> CreateRoomAsync(string userId, string username)
+        public async Task<Room> CreateRoomAsync(string username)
         {
             var room = new Room();
-            var player = new Player(userId, username, 1000);
+            var player = new Player(username, 1000);
             room.AddPlayer(player);
-            _gameLogic.StartNewHand(room);
+            
+            await SaveRoomToDbAsync(room);
+            return room;
+        }
+
+        public async Task<Room> StartHandRoomAsync(string roomId)
+        {
+            var room = await GetRoomAsync(roomId);
+            if (room == null) throw new InvalidOperationException("Room not found.");
+
+            if (room.Players != null && room.Players.Count > 1) 
+                _gameLogic.StartNewHand(room);
 
             await UpdateRoomAsync(room);
             return room;
         }
 
-        public async Task JoinRoomAsync(string roomId, string userId, string username)
+        public async Task JoinRoomAsync(string roomId, string username)
         {
             var room = await GetRoomAsync(roomId);
             if (room == null) throw new InvalidOperationException("Room not found.");
 
-            var player = new Player(userId, username, 1000);
+            var player = new Player(username, 1000);
             room.AddPlayer(player);
 
             await UpdateRoomAsync(room);
         }
 
-        public async Task PlaceBetAsync(string roomId, string userId, int amount)
+        public async Task PlaceBetAsync(string roomId, string username, int amount)
         {
             var room = await GetRoomAsync(roomId);
             if (room == null) throw new InvalidOperationException("Room not found.");
 
-            var player = room.Players.FirstOrDefault(p => p.UserId == userId);
+            var player = room.Players.FirstOrDefault(p => p.Username == username);
             if (player == null) throw new InvalidOperationException("Player not found.");
 
             player.PlaceBet(amount);
@@ -78,9 +97,9 @@ namespace PokerService.Services
             room.GameState.UpdateCurrentBet(amount);
 
             // تغییر نوبت به بازیکن بعدی
-            var currentPlayerIndex = room.Players.FindIndex(p => p.UserId == room.GameState.CurrentTurnUserId);
+            var currentPlayerIndex = room.Players.FindIndex(p => p.Username == room.GameState.CurrentTurnUsername);
             var nextPlayerIndex = (currentPlayerIndex + 1) % room.Players.Count;
-            room.GameState.SetCurrentTurn(room.Players[nextPlayerIndex].UserId);
+            room.GameState.SetCurrentTurn(room.Players[nextPlayerIndex].Username);
 
             if (room.GameState.CommunityCards.Count == 5)
             {
@@ -93,19 +112,19 @@ namespace PokerService.Services
             }
         }
 
-        public async Task FoldAsync(string roomId, string userId)
+        public async Task FoldAsync(string roomId, string username)
         {
             var room = await GetRoomAsync(roomId);
             if (room == null) throw new InvalidOperationException("Room not found.");
 
-            var player = room.Players.FirstOrDefault(p => p.UserId == userId);
+            var player = room.Players.FirstOrDefault(p => p.Username == username);
             if (player == null) throw new InvalidOperationException("Player not found.");
 
             room.Players.Remove(player); // بازیکن Fold می‌کنه و از بازی خارج می‌شه
 
-            var currentPlayerIndex = room.Players.FindIndex(p => p.UserId == room.GameState.CurrentTurnUserId);
+            var currentPlayerIndex = room.Players.FindIndex(p => p.Username == room.GameState.CurrentTurnUsername);
             var nextPlayerIndex = (currentPlayerIndex + 1) % room.Players.Count;
-            room.GameState.SetCurrentTurn(room.Players[nextPlayerIndex].UserId);
+            room.GameState.SetCurrentTurn(room.Players[nextPlayerIndex].Username);
 
             await UpdateRoomAsync(room);
         }

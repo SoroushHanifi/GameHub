@@ -6,7 +6,8 @@ namespace PokerService.Models
 {
     public class Room : BaseModel
     {
-        public List<Player> Players { get; set; }
+        public Guid GameStateId { get; set; }
+        public List<Player> Players { get; set; } 
         public GameState GameState { get; set; }
         public int Pot { get; set; }
         public Room()
@@ -14,11 +15,12 @@ namespace PokerService.Models
             Id = Guid.NewGuid();
             CreatedAt = DateTime.UtcNow;
             GameState = new GameState();
+            Players = new List<Player>();
         }
 
         public void AddPlayer(Player player)
         {
-            if (Players == null || Players.Count >= 9) throw new InvalidOperationException("Room is full.");
+            if (Players != null && Players.Count >= 9) throw new InvalidOperationException("Room is full.");
             Players.Add(player);
         }
 

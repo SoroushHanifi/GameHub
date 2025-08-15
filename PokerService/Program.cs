@@ -7,6 +7,7 @@ using PokerService.Hubs;
 using PokerService.Services;
 using StackExchange.Redis;
 using System.Security.Claims;
+using System.Text;
 
 
 
@@ -41,37 +42,33 @@ namespace PokerService
             // تنظیم SignalR
             builder.Services.AddSignalR();
 
-            builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-              .AddJwtBearer(options =>
-              {
-                  options.Authority = builder.Configuration["AuthService:Authority"]; // یا نگذار
-                  options.TokenValidationParameters = new TokenValidationParameters
-                  {
-                      ValidateIssuer = true,
-                      ValidateAudience = true,
-                      ValidateLifetime = true,
-                      ValidateIssuerSigningKey = true,
-                      ValidIssuer = builder.Configuration["Jwt:Issuer"],
-                      ValidAudience = builder.Configuration["Jwt:Audience"],
-
-                      NameClaimType = ClaimTypes.Name,               // این claim برای Identity.Name
-                      RoleClaimType = ClaimTypes.Role               // این claim برای نقش‌ها
-                  };
-
-                  options.Events = new JwtBearerEvents
-                  {
-                      OnMessageReceived = context =>
-                      {
-                          var accessToken = context.Request.Query["access_token"];
-                          var path = context.HttpContext.Request.Path;
-                          if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/pokerHub"))
-                          {
-                              context.Token = accessToken;
-                          }
-                          return Task.CompletedTask;
-                      }
-                  };
-              });
+            builder.Services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            }).AddJwtBearer(options =>
+            {
+                var accessTokenCookieName = builder.Configuration["Jwt:AccessTokenCookieName"];
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = builder.Configuration["Jwt:Issuer"],
+                    ValidAudience = builder.Configuration["Jwt:Audience"],
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"])),
+                    ClockSkew = TimeSpan.Zero
+                };
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        context.Token = context.Request.Cookies[accessTokenCookieName ?? "auth_access"];
+                        return Task.CompletedTask;
+                    }
+                };
+            });
 
 
             builder.Services.AddCors(options =>

@@ -17,10 +17,10 @@ namespace PokerService.Hubs
         }
         public async Task<string> CreateRoom()
         {
-            var userId = Context.UserIdentifier;
+
             var username = Context.User.Identity.Name;
             
-            var room = await _gameService.CreateRoomAsync(userId, username);
+            var room = await _gameService.CreateRoomAsync(username);
             await Groups.AddToGroupAsync(Context.ConnectionId, room.Id.ToString());
 
             var roomDto = _mapper.Map<RoomDto>(room);
@@ -29,11 +29,20 @@ namespace PokerService.Hubs
             return room.Id.ToString();
         }
 
+        public async Task StartHandRoom(string roomId)
+        {
+            await _gameService.StartHandRoomAsync(roomId);
+
+            await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
+            var room = await _gameService.GetRoomAsync(roomId);
+            var roomDto = _mapper.Map<RoomDto>(room);
+            await Clients.Group(roomId).SendAsync("PlayerJoined", roomDto);
+        }
+
         public async Task JoinRoom(string roomId)
         {
-            var userId = Context.UserIdentifier; // از JWT
             var username = Context.User.Identity.Name; // از JWT یا AuthService
-            await _gameService.JoinRoomAsync(roomId, userId, username);
+            await _gameService.JoinRoomAsync(roomId, username);
 
             await Groups.AddToGroupAsync(Context.ConnectionId, roomId);
             var room = await _gameService.GetRoomAsync(roomId);

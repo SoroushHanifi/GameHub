@@ -30,8 +30,8 @@ namespace PokerService.Services
             bigBlindPlayer.PlaceBet(20); // Big Blind
             room.UpdatePot(30);
             room.GameState.UpdateCurrentBet(20);
-            room.GameState.SetCurrentTurn(room.Players[2].UserId); // نوبت بازیکن بعدی
-            room.GameState = new GameState { CurrentTurnUserId = room.Players[2].UserId };
+            room.GameState.SetCurrentTurn(room.Players[2].Username); // نوبت بازیکن بعدی
+            room.GameState = new GameState { CurrentTurnUsername = room.Players[2].Username };
         }
 
         public void AdvancePhase(Room room)
@@ -54,7 +54,7 @@ namespace PokerService.Services
                     room.Pot = 0; // Pot به برنده داده می‌شه
                     break;
             }
-            room.GameState.SetCurrentTurn(room.Players.First().UserId); // نوبت به نفر اول برمی‌گرده
+            room.GameState.SetCurrentTurn(room.Players.First().Username); // نوبت به نفر اول برمی‌گرده
         }
 
         private GamePhase GetCurrentPhase(Room room)

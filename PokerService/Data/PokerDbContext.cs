@@ -14,6 +14,10 @@ namespace PokerService.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Room>().HasKey(r => r.Id);
+            modelBuilder.Entity<Card>().HasKey(c => new { c.Suit, c.Rank });
+            modelBuilder.Entity<GameState>().HasKey(g => g.GameStateId);
+            modelBuilder.Entity<Player>().HasKey(p => p.PlayerId);
+
         }
     }
 }
