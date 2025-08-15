@@ -1,10 +1,12 @@
 ﻿using AutoMapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using PokerService.Data;
 using PokerService.Hubs;
 using PokerService.Services;
 using StackExchange.Redis;
+using System.Security.Claims;
 
 
 
@@ -39,21 +41,50 @@ namespace PokerService
             // تنظیم SignalR
             builder.Services.AddSignalR();
 
-            // تنظیم احراز هویت
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options =>
+              .AddJwtBearer(options =>
+              {
+                  options.Authority = builder.Configuration["AuthService:Authority"]; // یا نگذار
+                  options.TokenValidationParameters = new TokenValidationParameters
+                  {
+                      ValidateIssuer = true,
+                      ValidateAudience = true,
+                      ValidateLifetime = true,
+                      ValidateIssuerSigningKey = true,
+                      ValidIssuer = builder.Configuration["Jwt:Issuer"],
+                      ValidAudience = builder.Configuration["Jwt:Audience"],
+
+                      NameClaimType = ClaimTypes.Name,               // این claim برای Identity.Name
+                      RoleClaimType = ClaimTypes.Role               // این claim برای نقش‌ها
+                  };
+
+                  options.Events = new JwtBearerEvents
+                  {
+                      OnMessageReceived = context =>
+                      {
+                          var accessToken = context.Request.Query["access_token"];
+                          var path = context.HttpContext.Request.Path;
+                          if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/pokerHub"))
+                          {
+                              context.Token = accessToken;
+                          }
+                          return Task.CompletedTask;
+                      }
+                  };
+              });
+
+
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowAll", policy =>
                 {
-                    options.Authority = builder.Configuration["AuthService:Authority"];
-                    options.TokenValidationParameters = new()
-                    {
-                        ValidateIssuer = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
-                        NameClaimType = "name",
-                        RoleClaimType = "role"
-                    };
+                    policy
+                        .AllowAnyHeader()
+                        .AllowAnyMethod()
+                        .AllowCredentials()
+                        .SetIsOriginAllowed(origin => true); // اجازه همه origin ها
                 });
+            });
 
             var app = builder.Build();
 
@@ -65,6 +96,7 @@ namespace PokerService
             }
 
             app.UseHttpsRedirection();
+            app.UseCors("AllowAll"); // قبل از Authentication و Authorization
             app.UseAuthentication();
             app.UseAuthorization();
 

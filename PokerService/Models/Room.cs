@@ -18,7 +18,7 @@ namespace PokerService.Models
 
         public void AddPlayer(Player player)
         {
-            if (Players.Count >= 9) throw new InvalidOperationException("Room is full.");
+            if (Players == null || Players.Count >= 9) throw new InvalidOperationException("Room is full.");
             Players.Add(player);
         }
 

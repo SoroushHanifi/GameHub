@@ -15,6 +15,19 @@ namespace PokerService.Hubs
             _gameService = gameService;
             _mapper = mapper;
         }
+        public async Task<string> CreateRoom()
+        {
+            var userId = Context.UserIdentifier;
+            var username = Context.User.Identity.Name;
+            
+            var room = await _gameService.CreateRoomAsync(userId, username);
+            await Groups.AddToGroupAsync(Context.ConnectionId, room.Id.ToString());
+
+            var roomDto = _mapper.Map<RoomDto>(room);
+            await Clients.Caller.SendAsync("RoomCreated", roomDto);
+
+            return room.Id.ToString();
+        }
 
         public async Task JoinRoom(string roomId)
         {
