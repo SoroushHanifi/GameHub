@@ -4,7 +4,6 @@ namespace PokerService.Models
 {
     public class GameState
     {
-        public Guid GameStateId { get; set; }
         public List<Card> CommunityCards { get; set; } = new(); 
         public string CurrentTurnUsername { get; set; }
         public int CurrentBet { get; set; }

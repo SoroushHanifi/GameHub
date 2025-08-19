@@ -6,7 +6,6 @@ namespace PokerService.Models
 {
     public class Room : BaseModel
     {
-        public Guid GameStateId { get; set; }
         public List<Player> Players { get; set; } 
         public GameState GameState { get; set; }
         public int Pot { get; set; }

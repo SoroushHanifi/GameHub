@@ -42,7 +42,7 @@ namespace PokerService.Services
                 await _dbContext.SaveChangesAsync();
 
                 var db = _redis.GetDatabase();
-                await db.KeyDeleteAsync($"Room:{room.Id}");
+                await db.StringSetAsync($"Room:{room.Id}", JsonSerializer.Serialize(room));
             }
             catch (Exception ex)
             {
