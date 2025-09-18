@@ -4,28 +4,81 @@ namespace PokerService.Models
 {
     public class Player
     {
-        public Guid PlayerId { get; set; }
-        public string Username { get; private set; }
-        public int Chips { get; private set; }
-        public List<Card> Hand { get; private set; } = new();
+        public string Username { get; set; }
+        public string ConnectionId { get; set; }
+        public int ChipCount { get; set; }
+        public List<Card> Hand { get; set; }
+        public int CurrentBet { get; set; }
+        public bool IsFolded { get; set; }
+        public bool IsAllIn { get; set; }
+        public int TotalBetInRound { get; set; }
+        public bool IsDealer { get; set; }
+        public bool IsSmallBlind { get; set; }
+        public bool IsBigBlind { get; set; }
 
-        public Player() { } // EF نیاز دارد
+        public Player()
+        {
+            Hand = new List<Card>();
+        }
 
-        public Player(string username, int initialChips)
+        public Player(string username, int initialChips = 1000)
         {
             Username = username;
-            Chips = initialChips;
+            ChipCount = initialChips;
+            Hand = new List<Card>();
+            CurrentBet = 0;
+            IsFolded = false;
+            IsAllIn = false;
+            TotalBetInRound = 0;
         }
 
-        public void AddCard(Card card)
+        public bool PlaceBet(int amount)
         {
-            Hand.Add(card);
+            if (amount > ChipCount)
+            {
+                // All-in
+                CurrentBet = ChipCount;
+                ChipCount = 0;
+                IsAllIn = true;
+                return true;
+            }
+
+            if (amount < 0)
+                return false;
+
+            ChipCount -= amount;
+            CurrentBet += amount;
+            TotalBetInRound += amount;
+
+            if (ChipCount == 0)
+                IsAllIn = true;
+
+            return true;
         }
 
-        public void PlaceBet(int amount)
+        public void Fold()
         {
-            if (amount > Chips) throw new InvalidOperationException("Not enough chips.");
-            Chips -= amount;
+            IsFolded = true;
+            Hand.Clear();
+        }
+
+        public void ResetForNewHand()
+        {
+            Hand.Clear();
+            CurrentBet = 0;
+            TotalBetInRound = 0;
+            IsFolded = false;
+            IsAllIn = false;
+        }
+
+        public void ResetForNewBettingRound()
+        {
+            CurrentBet = 0;
+        }
+
+        public void Win(int amount)
+        {
+            ChipCount += amount;
         }
     }
 }
