@@ -1,4 +1,4 @@
-using AuthService.Data;
+﻿using AuthService.Data;
 using AuthService.Mappings;
 using AuthService.Middleware;
 using AuthService.Models.Domain;
@@ -65,25 +65,24 @@ builder.Services.AddAuthentication(options =>
 // Configure CORS from appsettings.json
 var corsSettings = builder.Configuration.GetSection("Cors");
 var allowedOrigins = corsSettings.GetSection("AllowedOrigins").Get<string[]>();
-
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("RestrictedCors", builder =>
+    options.AddPolicy("AllowAll", policy =>
     {
-        builder.WithOrigins(allowedOrigins)
-               .AllowAnyMethod()
-               .AllowAnyHeader()
-               .AllowCredentials();
+        policy
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials()
+            .SetIsOriginAllowed(origin => true); // اجازه همه origin ها
     });
 });
-
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 app.UseHttpsRedirection();
+app.UseCors("AllowAll"); // این خط باید قبل از Authentication و Authorization باشه
 app.UseSwagger();
 app.UseSwaggerUI(); 
-app.UseCors("RestrictedCors");
 app.UseMiddleware<RateLimitingMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();

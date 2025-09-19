@@ -129,14 +129,27 @@ namespace PokerService
                 {
                     OnMessageReceived = context =>
                     {
-                        // Read token from cookie for regular requests
+                        // Read token from multiple sources
                         var token = context.Request.Cookies[accessTokenCookieName];
 
-                        // For SignalR, also check query string
+                        // For SignalR, check query string
                         if (string.IsNullOrEmpty(token) &&
                             context.Request.Path.StartsWithSegments("/pokerHub"))
                         {
                             token = context.Request.Query["access_token"];
+                        }
+
+                        // Also check Authorization header
+                        if (string.IsNullOrEmpty(token))
+                        {
+                            string authorization = context.Request.Headers["Authorization"];
+                            if (!string.IsNullOrEmpty(authorization))
+                            {
+                                if (authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    token = authorization.Substring("Bearer ".Length).Trim();
+                                }
+                            }
                         }
 
                         if (!string.IsNullOrEmpty(token))
@@ -152,36 +165,29 @@ namespace PokerService
                         {
                             context.Response.Headers.Add("Token-Expired", "true");
                         }
+                        Console.WriteLine($"Authentication failed: {context.Exception.Message}");
+                        return Task.CompletedTask;
+                    },
+                    OnChallenge = context =>
+                    {
+                        Console.WriteLine($"Authentication challenge: {context.Error}, {context.ErrorDescription}");
                         return Task.CompletedTask;
                     }
                 };
             });
 
             builder.Services.AddAuthorization();
-
-            // Configure CORS
             builder.Services.AddCors(options =>
             {
-                options.AddPolicy("PokerCorsPolicy", policy =>
+                options.AddPolicy("AllowAll", policy =>
                 {
-                    policy.WithOrigins(
-                            "http://localhost:3000",
-                            "http://localhost:5173",
-                            "https://localhost:44393",
-                            "http://127.0.0.1:5500") // For Live Server
+                    policy
                         .AllowAnyHeader()
                         .AllowAnyMethod()
                         .AllowCredentials()
-                        .WithExposedHeaders("Token-Expired");
-
-                    // For development - allow all origins
-                    if (builder.Environment.IsDevelopment())
-                    {
-                        policy.SetIsOriginAllowed(origin => true);
-                    }
+                        .SetIsOriginAllowed(origin => true); // اجازه همه origin ها
                 });
             });
-
             // Add Health Checks with custom implementations
             builder.Services.AddHealthChecks()
                 .AddTypeActivatedCheck<DatabaseHealthCheck>(
@@ -216,7 +222,7 @@ namespace PokerService
             }
 
             app.UseHttpsRedirection();
-            app.UseCors("PokerCorsPolicy");
+            app.UseCors("AllowAll"); // این خط باید قبل از Authentication و Authorization باشه           
             app.UseAuthentication();
             app.UseAuthorization();
 

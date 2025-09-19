@@ -189,7 +189,7 @@ namespace PokerService.Services
                 throw new InvalidOperationException("Player cannot bet.");
 
             // Validate bet amount
-            if (amount < room.GameState.CurrentBet && amount != player.ChipCount)
+            if (amount < room.GameState.CurrentBet - player.CurrentBet && amount != player.ChipCount)
                 throw new InvalidOperationException($"Bet must be at least {room.GameState.CurrentBet}");
 
             if (!player.PlaceBet(amount))

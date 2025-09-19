@@ -1,7 +1,9 @@
-﻿using AuthService.Models.Dtos;
+﻿// AuthService/Controllers/AuthController.cs
+using AuthService.Models.Dtos;
 using AuthService.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace AuthService.Controllers;
 
@@ -18,7 +20,6 @@ public class AuthController : ControllerBase
         _configuration = configuration;
     }
 
-
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterModel model)
     {
@@ -27,7 +28,7 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = result.Message });
         return Ok(new { message = "User registered successfully", data = result.Data });
     }
-    
+
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginModel model)
     {
@@ -35,24 +36,43 @@ public class AuthController : ControllerBase
         if (!result.Success)
             return Unauthorized(new { message = result.Message });
 
-        // Set JWT and Refresh Token in cookies
-        Response.Cookies.Append(_configuration["Jwt:AccessTokenCookieName"], result.Data.AccessToken, new CookieOptions
+        // Cookie options for cross-service sharing
+        var cookieOptions = new CookieOptions
         {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.Strict,
-            Expires = result.Data.ExpiresIn
-        });
+            HttpOnly = false, // Allow JavaScript access for SignalR
+            Secure = Request.IsHttps, // Only HTTPS in production
+            SameSite = SameSiteMode.None, // Allow cross-origin
+            Expires = result.Data.ExpiresIn,
+            Domain = "localhost", // Share across all localhost ports
+            Path = "/"
+        };
 
-        Response.Cookies.Append(_configuration["Jwt:RefreshTokenCookieName"], result.Data.RefreshToken, new CookieOptions
+        // For development - less restrictive options
+        if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development")
         {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.Strict,
-            Expires = result.Data.ExpiresIn.AddDays(int.Parse(_configuration["Jwt:RefreshTokenExpiryDays"]))
-        });
+            cookieOptions.SameSite = SameSiteMode.Lax;
+            cookieOptions.HttpOnly = false;
+        }
 
-        return Ok(new { message = "Login successful" });
+        // Set cookies
+        Response.Cookies.Append(
+            _configuration["Jwt:AccessTokenCookieName"] ?? "auth_access",
+            result.Data.AccessToken,
+            cookieOptions);
+
+        Response.Cookies.Append(
+            _configuration["Jwt:RefreshTokenCookieName"] ?? "auth_refresh",
+            result.Data.RefreshToken,
+            cookieOptions);
+
+        // Also return token in response for direct use
+        return Ok(new
+        {
+            message = "Login successful",
+            accessToken = result.Data.AccessToken,
+            refreshToken = result.Data.RefreshToken,
+            expiresIn = result.Data.ExpiresIn
+        });
     }
 
     [HttpPost("refresh-token")]
@@ -60,6 +80,16 @@ public class AuthController : ControllerBase
     {
         var accessToken = Request.Cookies[_configuration["Jwt:AccessTokenCookieName"]];
         var refreshToken = Request.Cookies[_configuration["Jwt:RefreshTokenCookieName"]];
+
+        // Also check Authorization header as fallback
+        if (string.IsNullOrEmpty(accessToken))
+        {
+            var authHeader = Request.Headers["Authorization"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer "))
+            {
+                accessToken = authHeader.Substring(7);
+            }
+        }
 
         if (string.IsNullOrEmpty(accessToken) || string.IsNullOrEmpty(refreshToken))
         {
@@ -76,33 +106,86 @@ public class AuthController : ControllerBase
         if (!result.Success)
             return Unauthorized(new { message = result.Message });
 
-        // Set new JWT and Refresh Token in cookies
-        Response.Cookies.Append(_configuration["Jwt:AccessTokenCookieName"], result.Data.AccessToken, new CookieOptions
+        var cookieOptions = new CookieOptions
         {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.Strict,
-            Expires = result.Data.ExpiresIn
-        });
+            HttpOnly = false,
+            Secure = Request.IsHttps,
+            SameSite = SameSiteMode.None,
+            Expires = result.Data.ExpiresIn,
+            Domain = "localhost",
+            Path = "/"
+        };
 
-        Response.Cookies.Append(_configuration["Jwt:RefreshTokenCookieName"], result.Data.RefreshToken, new CookieOptions
+        Response.Cookies.Append(
+            _configuration["Jwt:AccessTokenCookieName"] ?? "auth_access",
+            result.Data.AccessToken,
+            cookieOptions);
+
+        Response.Cookies.Append(
+            _configuration["Jwt:RefreshTokenCookieName"] ?? "auth_refresh",
+            result.Data.RefreshToken,
+            cookieOptions);
+
+        return Ok(new
         {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.Strict,
-            Expires = result.Data.ExpiresIn.AddDays(int.Parse(_configuration["Jwt:RefreshTokenExpiryDays"]))
+            message = "Token refreshed successfully",
+            accessToken = result.Data.AccessToken,
+            refreshToken = result.Data.RefreshToken,
+            expiresIn = result.Data.ExpiresIn
         });
-
-        return Ok(new { message = "Token refreshed successfully" });
     }
 
-    [HttpPost("Islogin")]
+    [HttpPost("islogin")]
     [Authorize]
     public async Task<IActionResult> IsLogin()
     {
-        return Ok(new { message = "Login successful" });
+        var username = User.Identity?.Name;
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var role = User.FindFirst(ClaimTypes.Role)?.Value;
+
+        return Ok(new
+        {
+            message = "User is authenticated",
+            isAuthenticated = true,
+            username,
+            userId,
+            role
+        });
     }
 
+    [HttpPost("logout")]
+    public IActionResult Logout()
+    {
+        // Clear cookies
+        var cookieOptions = new CookieOptions
+        {
+            Expires = DateTime.UtcNow.AddDays(-1),
+            Domain = "localhost",
+            Path = "/"
+        };
+
+        Response.Cookies.Append(
+            _configuration["Jwt:AccessTokenCookieName"] ?? "auth_access",
+            "",
+            cookieOptions);
+
+        Response.Cookies.Append(
+            _configuration["Jwt:RefreshTokenCookieName"] ?? "auth_refresh",
+            "",
+            cookieOptions);
+
+        return Ok(new { message = "Logged out successfully" });
+    }
+
+    // Test endpoint for development
+    [HttpGet("test")]
+    public IActionResult Test()
+    {
+        return Ok(new
+        {
+            message = "AuthService is running",
+            time = DateTime.UtcNow,
+            environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+        });
+    }
 }
-
-
