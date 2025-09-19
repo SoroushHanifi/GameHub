@@ -8,6 +8,7 @@ using PokerService.Services;
 using System;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
+using System.Security.Claims;
 
 namespace PokerService.Hubs
 {
@@ -397,7 +398,7 @@ namespace PokerService.Hubs
             if (string.IsNullOrEmpty(username))
             {
                 // Fallback to User claim
-                username = Context.User?.FindFirst("username")?.Value;
+                username = Context.User.FindFirst(ClaimTypes.Name)?.Value;
             }
 
             if (string.IsNullOrEmpty(username))
